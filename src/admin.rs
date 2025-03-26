@@ -1,7 +1,7 @@
 use axum::{response::Html, routing::get, Router};
-use tokio_util::sync::CancellationToken;
+use pingora::server::ShutdownWatch;
 
-pub async fn start_admin_server(cancel: CancellationToken) -> anyhow::Result<()> {
+pub async fn start_admin_server(mut shutdown: ShutdownWatch) -> anyhow::Result<()> {
     let app = Router::new().route("/healthz", get(handler));
 
     // run it
@@ -12,8 +12,8 @@ pub async fn start_admin_server(cancel: CancellationToken) -> anyhow::Result<()>
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             tokio::select! {
-                _ = cancel.cancelled() => {
-                    println!("admin server shutdown");
+                _ = shutdown.changed() => {
+                  println!("admin server shutdown");
                 },
             }
         })

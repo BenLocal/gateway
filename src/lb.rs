@@ -40,8 +40,12 @@ impl GatewayLoadBalancer {
     pub fn new(name: &str, options: GatewayLoadBalancerOptions) -> Self {
         let backends = Backends::new(options.service_discovery);
         let mut upstreams = LoadBalancer::from_backends(backends);
-        upstreams.set_health_check(TcpHealthCheck::new());
-        upstreams.health_check_frequency = Some(std::time::Duration::from_secs(1));
+
+        if options.health_check {
+            upstreams.set_health_check(TcpHealthCheck::new());
+            upstreams.health_check_frequency = Some(std::time::Duration::from_secs(1));
+        }
+
         upstreams.update_frequency = Some(std::time::Duration::from_secs(5));
         Self {
             name: name.to_string(),

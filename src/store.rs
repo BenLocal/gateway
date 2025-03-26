@@ -6,9 +6,7 @@ use std::{
 use tokio::sync::{OnceCell, RwLock};
 
 use crate::{
-    lb::{
-        GatewayLoadBalancer, GatewayLoadBalancerOptions, GatewayMatchRule, PingoraServiceDiscovery,
-    },
+    lb::{GatewayLoadBalancer, GatewayLoadBalancerOptions},
     service::PingoraBackgroundService,
 };
 
