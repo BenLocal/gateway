@@ -2,13 +2,33 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pingora::{
-    lb::{Backends, LoadBalancer},
+    lb::{discovery::ServiceDiscovery, Backends, LoadBalancer},
     prelude::*,
     server::ShutdownWatch,
     services::background::BackgroundService,
 };
 
-use crate::service_discovery::GatewayServiceDiscovery;
+pub type PingoraServiceDiscovery = Box<dyn ServiceDiscovery + Send + Sync + 'static>;
+
+pub struct GatewayLoadBalancerOptions {
+    pub match_rule: GatewayMatchRule,
+    pub service_discovery: PingoraServiceDiscovery,
+    pub health_check: bool,
+}
+
+impl GatewayLoadBalancerOptions {
+    pub fn new(
+        match_rule: GatewayMatchRule,
+        service_discovery: PingoraServiceDiscovery,
+        health_check: bool,
+    ) -> Self {
+        Self {
+            match_rule,
+            service_discovery,
+            health_check,
+        }
+    }
+}
 
 pub struct GatewayLoadBalancer {
     name: String,
@@ -17,15 +37,15 @@ pub struct GatewayLoadBalancer {
 }
 
 impl GatewayLoadBalancer {
-    pub fn new(name: &str, match_rule: GatewayMatchRule) -> Self {
-        let backends = Backends::new(Box::new(GatewayServiceDiscovery::new()));
+    pub fn new(name: &str, options: GatewayLoadBalancerOptions) -> Self {
+        let backends = Backends::new(options.service_discovery);
         let mut upstreams = LoadBalancer::from_backends(backends);
         upstreams.set_health_check(TcpHealthCheck::new());
         upstreams.health_check_frequency = Some(std::time::Duration::from_secs(1));
         upstreams.update_frequency = Some(std::time::Duration::from_secs(5));
         Self {
             name: name.to_string(),
-            match_rule,
+            match_rule: options.match_rule,
             inner: Arc::new(upstreams),
         }
     }

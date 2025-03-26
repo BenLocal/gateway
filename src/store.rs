@@ -6,7 +6,9 @@ use std::{
 use tokio::sync::{OnceCell, RwLock};
 
 use crate::{
-    lb::{GatewayLoadBalancer, GatewayMatchRule},
+    lb::{
+        GatewayLoadBalancer, GatewayLoadBalancerOptions, GatewayMatchRule, PingoraServiceDiscovery,
+    },
     service::PingoraBackgroundService,
 };
 
@@ -33,7 +35,7 @@ pub fn init_proxy_cmd(tx: tokio::sync::mpsc::Sender<ProxyCmd>) {
 }
 
 pub enum ProxyCmd {
-    Add(String, GatewayMatchRule),
+    Add(String, GatewayLoadBalancerOptions),
     Remove(String),
 }
 

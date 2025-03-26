@@ -5,8 +5,12 @@ use pingora::{
     server::{ListenFds, ShutdownWatch},
     services::{background::BackgroundService, Service},
 };
+use tokio_util::sync::CancellationToken;
 
-use crate::{lb::GatewayLoadBalancer, store::GlobalBackgroundCmd};
+use crate::{
+    lb::{GatewayLoadBalancer, GatewayLoadBalancerOptions, GatewayMatchRule},
+    store::{GlobalBackgroundCmd, ProxyCmd},
+};
 
 pub type PingoraBackgroundService = Box<Arc<dyn BackgroundService + Send + Sync + 'static>>;
 
@@ -132,8 +136,8 @@ impl Service for ProxyService {
                 }
                 Some(v) = self.cmd_rev.recv() => {
                     match v {
-                        crate::store::ProxyCmd::Add(key, rule) => {
-                            let lb = Arc::new(GatewayLoadBalancer::new(&key, rule));
+                        crate::store::ProxyCmd::Add(key, options) => {
+                            let lb = Arc::new(GatewayLoadBalancer::new(&key, options));
                             let mut reoutes = crate::store::ROUTES.write().await;
                             reoutes.insert(key.to_string(), Arc::clone(&lb));
 
@@ -146,6 +150,7 @@ impl Service for ProxyService {
                         crate::store::ProxyCmd::Remove(key) => {
                             let mut reoutes = crate::store::ROUTES.write().await;
                             reoutes.remove(&key);
+                            // try to remove health check
                             let _ = crate::store::globalbackground_cmd(crate::store::GlobalBackgroundCmd::Remove(
                                 format!("{}_hc", key)
                             )).await;
@@ -159,6 +164,66 @@ impl Service for ProxyService {
 
     fn name(&self) -> &str {
         "ProxyService"
+    }
+
+    fn threads(&self) -> Option<usize> {
+        Some(1)
+    }
+}
+
+pub struct AdminService {
+    cancel: CancellationToken,
+}
+
+impl AdminService {
+    pub fn new(cancel: CancellationToken) -> Self {
+        Self { cancel }
+    }
+}
+
+#[async_trait]
+impl Service for AdminService {
+    async fn start_service(&mut self, _fds: Option<ListenFds>, shutdown: ShutdownWatch) {
+        loop {
+            let mut shutdown = shutdown.clone();
+
+            tokio::spawn(async {
+                let options = GatewayLoadBalancerOptions::new(
+                    GatewayMatchRule::PathStartsWith("/healthz".to_string()),
+                    pingora::lb::discovery::Static::try_from_iter(&vec!["127.0.0.1:3000"]).unwrap(),
+                    false,
+                );
+
+                if let Err(e) =
+                    crate::store::proxy_cmd(ProxyCmd::Add("admin".to_string(), options)).await
+                {
+                    println!("err: {:?}", e);
+                }
+            });
+            tokio::select! {
+                _ = shutdown.changed() => {
+                    if *shutdown.borrow() {
+                        self.cancel.cancel();
+                        break;
+                    }
+                }
+                _ = crate::admin::start_admin_server(self.cancel.clone()) => {
+                    break;
+                }
+            }
+
+            {
+                println!("remove test");
+                if let Err(e) = crate::store::proxy_cmd(ProxyCmd::Remove("admin".to_string())).await
+                {
+                    println!("err: {:?}", e);
+                }
+            }
+        }
+    }
+
+    fn name(&self) -> &str {
+        "AdminService"
     }
 
     fn threads(&self) -> Option<usize> {
