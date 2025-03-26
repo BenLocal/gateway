@@ -1,0 +1,12 @@
+[package]
+name = "gateway"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+pingora = { version = "0.4", features = ["lb"] }
+async-trait = "0.1"
+arc-swap = "1.7"
+anyhow = "1"
+futures = "0.3"
