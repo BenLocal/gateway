@@ -8,6 +8,7 @@ use pingora::{
 
 use crate::{
     lb::{GatewayLoadBalancer, GatewayLoadBalancerOptions, GatewayMatchRule},
+    service_discovery::DockerServiceDiscovery,
     store::{GlobalBackgroundCmd, ProxyCmd},
 };
 
@@ -191,6 +192,19 @@ impl Service for AdminService {
 
                 if let Err(e) =
                     crate::store::proxy_cmd(ProxyCmd::Add("admin".to_string(), options)).await
+                {
+                    println!("err: {:?}", e);
+                }
+
+                // test docker
+                let options = GatewayLoadBalancerOptions::new(
+                    GatewayMatchRule::PathStartsWith("/docker".to_string()),
+                    Box::new(DockerServiceDiscovery::new("app")),
+                    true,
+                );
+
+                if let Err(e) =
+                    crate::store::proxy_cmd(ProxyCmd::Add("docker".to_string(), options)).await
                 {
                     println!("err: {:?}", e);
                 }
