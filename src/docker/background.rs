@@ -119,7 +119,7 @@ impl BackgroundService for DockerBackgroundService {
                         break;
                     }
                 }
-                _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {
                     if let Ok(c) = self.update().await {
                         {
                             let mut containers = crate::store::CONTAINERS.write().await;
