@@ -112,7 +112,6 @@ impl DockerBackgroundService {
 impl BackgroundService for DockerBackgroundService {
     async fn start(&self, shutdown: ShutdownWatch) {
         let mut shutdown = shutdown.clone();
-        let mut containers = vec![];
         loop {
             tokio::select! {
                 _ = shutdown.changed() => {
@@ -122,7 +121,11 @@ impl BackgroundService for DockerBackgroundService {
                 }
                 _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
                     if let Ok(c) = self.update().await {
-                        containers = c;
+                        {
+                            let mut containers = crate::store::CONTAINERS.write().await;
+                            containers.clear();
+                            containers.extend(c);
+                        }
                     }
                 }
             }

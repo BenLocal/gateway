@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+use bollard::secret::ContainerSummary;
 use tokio::sync::{OnceCell, RwLock};
 
 use crate::{
@@ -15,6 +16,8 @@ pub static ROUTES: LazyLock<RwLock<HashMap<String, Arc<GatewayLoadBalancer>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 static GLOBALBACKGROUND_CMD: OnceCell<tokio::sync::mpsc::Sender<GlobalBackgroundCmd>> =
     OnceCell::const_new();
+pub static CONTAINERS: LazyLock<RwLock<Vec<ContainerSummary>>> =
+    LazyLock::new(|| RwLock::new(Vec::new()));
 
 pub async fn proxy_cmd(cmd: ProxyCmd) -> anyhow::Result<()> {
     Ok(PROXY_CMD

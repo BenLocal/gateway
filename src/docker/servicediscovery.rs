@@ -2,7 +2,6 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bollard::container::ListContainersOptions;
 use bollard::network::InspectNetworkOptions;
 use bollard::secret::ContainerSummary;
 use pingora::lb::{discovery::ServiceDiscovery, Backend};
@@ -11,6 +10,7 @@ use pingora::prelude::*;
 use crate::r#const::{
     DOCKER_LABEL_DOCKER_COMPOSE_SERVICE, DOCKER_LABEL_GATEWAY_HOST_IP, DOCKER_LABEL_GATEWAY_MODE,
 };
+use crate::store;
 
 pub struct DockerServiceDiscovery {
     name: String,
@@ -26,24 +26,24 @@ impl DockerServiceDiscovery {
     }
 
     async fn filter_container_list(&self) -> anyhow::Result<Vec<Container>> {
-        let mut filters = HashMap::new();
-        if !self.name.is_empty() {
-            filters.insert(
-                "label".to_string(),
-                vec![format!(
-                    "{}={}",
-                    DOCKER_LABEL_DOCKER_COMPOSE_SERVICE, self.name
-                )],
-            );
-        }
+        let containers = store::CONTAINERS
+            .read()
+            .await
+            .iter()
+            .filter(|c| {
+                c.labels
+                    .as_ref()
+                    .map(|labels| {
+                        labels
+                            .get(DOCKER_LABEL_DOCKER_COMPOSE_SERVICE)
+                            .map(|s| s == &self.name)
+                            .unwrap_or(false)
+                    })
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
 
-        let options = Some(ListContainersOptions {
-            all: true,
-            filters: filters,
-            ..Default::default()
-        });
-
-        let containers = self.client.list_containers(options).await?;
         let docker0_ip = self.get_docker0_ip().await;
         Ok(containers
             .iter()

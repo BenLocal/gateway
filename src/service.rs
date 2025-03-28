@@ -68,16 +68,21 @@ impl Service for GlobalBackgroundService {
                 Some(v) = self.cmd_rev.recv() => {
                     match v {
                         GlobalBackgroundCmd::Add(key, hc) => {
+                            if self.services.contains_key(&key) {
+                                println!("service {} already exists", key);
+                                continue;
+                            }
+
                             let (hc_tx, hc_rx) = tokio::sync::watch::channel(false);
-                            let hc = Arc::new(hc);
-                            let hc_clone = hc.clone();
+                            let hc_arc = Arc::new(hc);
+                            let hc_clone = hc_arc.clone();
                             tokio::spawn(async move {
                                 hc_clone.start(hc_rx).await;
                             });
                             self.services.insert(
                                 key,
                                 BackgroundServiceInner {
-                                    inner: hc,
+                                    inner: hc_arc,
                                     closer: Some(hc_tx),
                                 },
                             );
