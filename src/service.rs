@@ -7,8 +7,8 @@ use pingora::{
 };
 
 use crate::{
+    docker::{background::DockerBackgroundService, servicediscovery::DockerServiceDiscovery},
     lb::{GatewayLoadBalancer, GatewayLoadBalancerOptions, GatewayMatchRule},
-    service_discovery::DockerServiceDiscovery,
     store::{GlobalBackgroundCmd, ProxyCmd},
 };
 
@@ -197,17 +197,7 @@ impl Service for AdminService {
                 }
 
                 // test docker
-                let options = GatewayLoadBalancerOptions::new(
-                    GatewayMatchRule::PathStartsWith("/docker".to_string()),
-                    Box::new(DockerServiceDiscovery::new("app")),
-                    true,
-                );
-
-                if let Err(e) =
-                    crate::store::proxy_cmd(ProxyCmd::Add("docker".to_string(), options)).await
-                {
-                    println!("err: {:?}", e);
-                }
+                test_docker().await;
             });
 
             let _ = crate::admin::start_admin_server(shutdown.clone()).await;
@@ -229,4 +219,25 @@ impl Service for AdminService {
     fn threads(&self) -> Option<usize> {
         Some(1)
     }
+}
+
+async fn test_docker() {
+    let docker_client = Arc::new(bollard::Docker::connect_with_defaults().unwrap());
+
+    let options = GatewayLoadBalancerOptions::new(
+        GatewayMatchRule::PathStartsWith("/docker".to_string()),
+        Box::new(DockerServiceDiscovery::new("app", docker_client.clone())),
+        true,
+    );
+
+    if let Err(e) = crate::store::proxy_cmd(ProxyCmd::Add("docker".to_string(), options)).await {
+        println!("err: {:?}", e);
+    }
+
+    let service = DockerBackgroundService::new(docker_client.clone());
+    let _ = crate::store::globalbackground_cmd(crate::store::GlobalBackgroundCmd::Add(
+        "docker_background_service".to_string(),
+        Box::new(Arc::new(service)),
+    ))
+    .await;
 }

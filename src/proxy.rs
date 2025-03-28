@@ -41,7 +41,12 @@ impl ProxyHttp for GatewayProxy {
                 Some(lb) => lb,
                 None => return Err(Error::new(ErrorType::ConnectNoRoute)),
             };
-            match lb.lb().select(b"", 256) {
+            match lb.lb().select_with(b"", 256, |backend, health| {
+                if backend.ext.is_empty() || backend.ext.get::<u64>() == Some(&1) {
+                    return health;
+                }
+                return false;
+            }) {
                 Some(upstream) => {
                     println!("upstream peer is: {} --> {:?}", lb.name(), upstream);
                     upstream

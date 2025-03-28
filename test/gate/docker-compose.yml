@@ -1,0 +1,11 @@
+services:
+  gateway:
+    build: .
+    ports:
+      - "8857:6188"
+    container_name: gateway
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - com.gateway.connect.network=true

@@ -1,0 +1,13 @@
+services:
+
+  app: 
+    image: 172.29.100.58:2025/higher-education/base/nginx:1.26.1_amd64
+    volumes:
+      - ../nginx.conf:/etc/nginx/nginx.conf
+      - ../index.html:/usr/share/nginx/html/index.html
+    # labels:
+    #   - com.gateway.mode=bridge
+    #   - com.gateway.host.ip=127.0.0.1
+  ping:
+    image: busybox:latest
+    command: tail -f /dev/null

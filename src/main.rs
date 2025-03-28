@@ -3,10 +3,11 @@ use proxy::GatewayProxy;
 use service::{AdminService, GlobalBackgroundService, ProxyService};
 
 mod admin;
+mod r#const;
+mod docker;
 mod lb;
 mod proxy;
 mod service;
-mod service_discovery;
 mod store;
 
 fn main() {

@@ -1,8 +1,0 @@
-services:
-
-  app: 
-    image: nginx:latest
-    ports:
-      - "8083:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
