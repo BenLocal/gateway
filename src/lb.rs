@@ -7,6 +7,7 @@ use pingora::{
     server::ShutdownWatch,
     services::background::BackgroundService,
 };
+use regex::Regex;
 
 pub type PingoraServiceDiscovery = Box<dyn ServiceDiscovery + Send + Sync + 'static>;
 
@@ -33,6 +34,7 @@ impl GatewayLoadBalancerOptions {
 pub struct GatewayLoadBalancer {
     name: String,
     match_rule: GatewayMatchRule,
+    rewrite: Option<(Regex, String)>,
     inner: Arc<LoadBalancer<RoundRobin>>,
 }
 
@@ -51,6 +53,7 @@ impl GatewayLoadBalancer {
             name: name.to_string(),
             match_rule: options.match_rule,
             inner: Arc::new(upstreams),
+            rewrite: None,
         }
     }
 
@@ -58,12 +61,21 @@ impl GatewayLoadBalancer {
         &self.name
     }
 
-    pub fn match_rule(&self) -> &GatewayMatchRule {
-        &self.match_rule
+    pub fn matches_path(&self, path: &str) -> bool {
+        self.match_rule.matches_path(path)
     }
 
     pub fn lb(&self) -> Arc<LoadBalancer<RoundRobin>> {
         self.inner.clone()
+    }
+
+    pub fn rewrite_path(&self, path: &str) -> Option<String> {
+        if let Some((regex, replacement)) = &self.rewrite {
+            if regex.is_match(path) {
+                return Some(regex.replace(path, replacement).to_string());
+            }
+        }
+        None
     }
 }
 
@@ -76,4 +88,32 @@ impl BackgroundService for GatewayLoadBalancer {
 
 pub enum GatewayMatchRule {
     PathStartsWith(String),
+    #[allow(dead_code)]
+    PathRegex(Regex),
+}
+
+impl GatewayMatchRule {
+    pub fn matches_path(&self, path: &str) -> bool {
+        match self {
+            GatewayMatchRule::PathStartsWith(prefix) => path.starts_with(prefix),
+            GatewayMatchRule::PathRegex(regex) => regex.is_match(path),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_gateway_match_rule() {
+        let rule_starts_with = GatewayMatchRule::PathStartsWith("/api".to_string());
+        let rule_regex = GatewayMatchRule::PathRegex(Regex::new(r"^/user/\d+$").unwrap());
+
+        let path1 = "/api/v1/resource";
+        let path2 = "/user/123";
+
+        assert!(rule_starts_with.matches_path(path1));
+        assert!(rule_regex.matches_path(path2));
+    }
 }

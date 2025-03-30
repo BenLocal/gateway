@@ -1,10 +1,11 @@
+use std::str::FromStr;
+
 use async_trait::async_trait;
+use axum::http::{uri::PathAndQuery, Uri};
 use pingora::{
     prelude::*,
     proxy::{ProxyHttp, Session},
 };
-
-use crate::lb::GatewayMatchRule;
 
 pub struct GatewayProxy;
 
@@ -29,18 +30,31 @@ impl ProxyHttp for GatewayProxy {
         let upstream = {
             let reoutes = &crate::store::ROUTES.read().await;
 
-            let lb = match reoutes.iter().find_map(|(_, lb)| match &lb.match_rule() {
-                GatewayMatchRule::PathStartsWith(prefix) => {
-                    if path.starts_with(prefix) {
-                        Some(lb)
-                    } else {
-                        None
-                    }
+            let lb = match reoutes.iter().find_map(|(_, lb)| {
+                if lb.matches_path(path) {
+                    Some(lb)
+                } else {
+                    None
                 }
             }) {
                 Some(lb) => lb,
                 None => return Err(Error::new(ErrorType::ConnectNoRoute)),
             };
+
+            if let Some(new_path) = lb.rewrite_path(path) {
+                let req = session.req_header_mut();
+                let mut uri = req.uri.clone().into_parts();
+                uri.path_and_query = uri.path_and_query.map(|pq| {
+                    let query = pq.query();
+                    let path_and_query = match query {
+                        Some(query) => format!("{}?{}", new_path, query),
+                        None => new_path.to_string(),
+                    };
+                    PathAndQuery::from_str(&path_and_query).unwrap()
+                });
+                req.set_uri(Uri::from_parts(uri).unwrap());
+            }
+
             match lb.lb().select_with(b"", 256, |backend, health| {
                 if backend.ext.is_empty() || backend.ext.get::<u64>() == Some(&1) {
                     return health;
