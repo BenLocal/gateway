@@ -1,6 +1,7 @@
+use admin::service::AdminService;
 use pingora::prelude::*;
 use proxy::GatewayProxy;
-use service::{AdminService, GlobalBackgroundService, ProxyService};
+use service::{GlobalBackgroundService, ProxyService};
 use tracing::Level;
 
 mod admin;
