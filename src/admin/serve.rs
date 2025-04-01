@@ -21,11 +21,11 @@ use crate::{
 pub async fn start_admin_server(mut shutdown: ShutdownWatch) -> anyhow::Result<()> {
     let app = Router::new()
         .route("/healthz", get(handler))
-        .route("/add_app", post(add_application))
-        .route("/update_app", post(update_application))
-        .route("/remove_app", post(remove_application))
-        .route("/get_app", post(get_application))
-        .route("/add_lb", post(add_lb));
+        .route("/app/add", post(add_application))
+        .route("/app/update", post(update_application))
+        .route("/app/remove", post(remove_application))
+        .route("/app/get", post(get_application))
+        .route("/lb/add", post(add_lb));
 
     // run it
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
@@ -52,7 +52,8 @@ async fn handler() -> Html<&'static str> {
 #[derive(Deserialize, Serialize)]
 struct Application {
     app_id: String,
-    app_limit: u32,
+    limit_interval_seconds: u64,
+    limit: u32,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -180,8 +181,8 @@ async fn update_application(Json(app): Json<Application>) -> &'static str {
     store::rate_limiters().write().await.insert(
         app_name.clone(),
         Arc::new(RateLimiter::new(
-            Rate::new(Duration::from_secs(1)),
-            app.app_limit,
+            Rate::new(Duration::from_secs(app.limit_interval_seconds)),
+            app.limit,
         )),
     );
 
@@ -201,8 +202,8 @@ async fn add_application(Json(app): Json<Application>) -> &'static str {
     store::rate_limiters().write().await.insert(
         app_name.clone(),
         Arc::new(RateLimiter::new(
-            Rate::new(Duration::from_secs(1)),
-            app.app_limit,
+            Rate::new(Duration::from_secs(app.limit_interval_seconds)),
+            app.limit,
         )),
     );
 

@@ -1,0 +1,27 @@
+@HOST=127.0.0.1:6188
+
+### health check
+GET http://{{HOST}}/admin/healthz
+X-GATEWAY-APPID: test1
+
+
+@limit=3
+### add application
+POST http://{{HOST}}/admin/app/add
+Content-Type: application/json
+
+{
+  "app_id": "test1",
+  "limit_interval_seconds": 60,
+  "limit": {{limit}}
+}
+
+### update application
+POST http://{{HOST}}/admin/app/update
+Content-Type: application/json
+
+{
+  "app_id": "test1",
+  "limit_interval_seconds": 60,
+  "limit": {{limit}}
+}

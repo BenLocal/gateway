@@ -1,0 +1,1 @@
+wrk -t4 -c100 -d30s -s custom_headers.lua http://127.0.0.1:6188/admin/healthz
