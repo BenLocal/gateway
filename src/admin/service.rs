@@ -29,10 +29,11 @@ impl Service for AdminService {
         loop {
             tokio::spawn(async {
                 let options = GatewayLoadBalancerOptions::new(
-                    GatewayMatchRule::PathStartsWith("/healthz".to_string()),
+                    GatewayMatchRule::PathStartsWith("/admin".to_string()),
                     pingora::lb::discovery::Static::try_from_iter(&vec!["127.0.0.1:3000"]).unwrap(),
                     false,
-                );
+                )
+                .with_rewrite(regex::Regex::new("^/admin").unwrap(), "".to_string());
 
                 if let Err(e) =
                     crate::store::proxy_cmd(ProxyCmd::Add("admin".to_string(), options)).await

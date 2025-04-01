@@ -15,6 +15,7 @@ pub struct GatewayLoadBalancerOptions {
     pub match_rule: GatewayMatchRule,
     pub service_discovery: PingoraServiceDiscovery,
     pub health_check: bool,
+    pub rewrite: Option<(Regex, String)>,
 }
 
 impl GatewayLoadBalancerOptions {
@@ -27,7 +28,13 @@ impl GatewayLoadBalancerOptions {
             match_rule,
             service_discovery,
             health_check,
+            rewrite: None,
         }
+    }
+
+    pub fn with_rewrite(mut self, regex: Regex, replacement: String) -> Self {
+        self.rewrite = Some((regex, replacement));
+        self
     }
 }
 
@@ -53,7 +60,7 @@ impl GatewayLoadBalancer {
             name: name.to_string(),
             match_rule: options.match_rule,
             inner: Arc::new(upstreams),
-            rewrite: None,
+            rewrite: options.rewrite,
         }
     }
 
