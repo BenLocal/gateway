@@ -28,11 +28,9 @@ pub async fn proxy_cmd(cmd: ProxyCmd) -> anyhow::Result<()> {
 }
 
 pub fn init_proxy_cmd(tx: tokio::sync::mpsc::Sender<ProxyCmd>) {
-    println!("Initializing PROXY_CMD");
-    match PROXY_CMD.set(tx) {
-        Ok(_) => println!("PROXY_CMD initialized successfully"),
-        Err(_) => println!("PROXY_CMD was already initialized!"),
-    }
+    PROXY_CMD
+        .set(tx)
+        .expect("expected PROXY_CMD to be set only once");
 }
 
 pub enum ProxyCmd {

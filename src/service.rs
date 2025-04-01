@@ -5,6 +5,7 @@ use pingora::{
     server::{ListenFds, ShutdownWatch},
     services::{background::BackgroundService, Service},
 };
+use tracing::{error, info};
 
 use crate::{
     docker::{background::DockerBackgroundService, servicediscovery::DockerServiceDiscovery},
@@ -69,7 +70,7 @@ impl Service for GlobalBackgroundService {
                     match v {
                         GlobalBackgroundCmd::Add(key, hc) => {
                             if self.services.contains_key(&key) {
-                                println!("service {} already exists", key);
+                                info!("service {} already exists", key);
                                 continue;
                             }
 
@@ -150,7 +151,7 @@ impl Service for ProxyService {
                                 format!("{}_hc", key),
                                 Box::new(lb),
                             )).await;
-                            println!("add route: {}", key);
+                            info!("add route: {}", key);
                         }
                         crate::store::ProxyCmd::Remove(key) => {
                             let mut reoutes = crate::store::ROUTES.write().await;
@@ -159,7 +160,7 @@ impl Service for ProxyService {
                             let _ = crate::store::globalbackground_cmd(crate::store::GlobalBackgroundCmd::Remove(
                                 format!("{}_hc", key)
                             )).await;
-                            println!("remove route: {}", key);
+                            info!("remove route: {}", key);
                         }
                     }
                 }
@@ -198,7 +199,7 @@ impl Service for AdminService {
                 if let Err(e) =
                     crate::store::proxy_cmd(ProxyCmd::Add("admin".to_string(), options)).await
                 {
-                    println!("err: {:?}", e);
+                    error!("err: {:?}", e);
                 }
 
                 // test docker
@@ -208,10 +209,10 @@ impl Service for AdminService {
             let _ = crate::admin::start_admin_server(shutdown.clone()).await;
 
             {
-                println!("remove admin route");
+                info!("remove admin route");
                 if let Err(e) = crate::store::proxy_cmd(ProxyCmd::Remove("admin".to_string())).await
                 {
-                    println!("err: {:?}", e);
+                    error!("err: {:?}", e);
                 }
             }
         }
@@ -236,7 +237,7 @@ async fn test_docker() {
     );
 
     if let Err(e) = crate::store::proxy_cmd(ProxyCmd::Add("docker".to_string(), options)).await {
-        println!("err: {:?}", e);
+        error!("err: {:?}", e);
     }
 
     let service = DockerBackgroundService::new(docker_client.clone());

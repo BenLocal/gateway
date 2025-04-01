@@ -7,6 +7,7 @@ use bollard::{
     secret::{ContainerSummary, Network},
 };
 use pingora::{server::ShutdownWatch, services::background::BackgroundService};
+use tracing::info;
 
 use crate::r#const::DOCKER_LABEL_GATEWAY_CONNECT_NETWORK;
 
@@ -25,7 +26,6 @@ impl DockerBackgroundService {
             ..Default::default()
         });
         let containers = self.client.list_containers(options).await?;
-        println!("start update docker containers");
         let network_connects = containers
             .iter()
             .filter(|c| {
@@ -84,7 +84,7 @@ impl DockerBackgroundService {
                             )
                             .await?;
 
-                        println!("Connected container {} to network {}", container_id, name);
+                        info!("Connected container {} to network {}", container_id, name);
                     }
                 }
                 _ => {}

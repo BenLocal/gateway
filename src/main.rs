@@ -1,6 +1,7 @@
 use pingora::prelude::*;
 use proxy::GatewayProxy;
 use service::{AdminService, GlobalBackgroundService, ProxyService};
+use tracing::Level;
 
 mod admin;
 mod r#const;
@@ -11,6 +12,15 @@ mod service;
 mod store;
 
 fn main() {
+    let trace = tracing_subscriber::fmt()
+        .compact()
+        .with_max_level(Level::INFO)
+        .with_thread_ids(true)
+        .with_thread_names(true)
+        .with_ansi(false);
+
+    let _ = trace.try_init();
+
     let mut my_server = Server::new(None).unwrap();
     my_server.bootstrap();
     my_server.add_service(GlobalBackgroundService::new());

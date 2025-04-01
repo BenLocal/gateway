@@ -6,6 +6,7 @@ use bollard::network::InspectNetworkOptions;
 use bollard::secret::ContainerSummary;
 use pingora::lb::{discovery::ServiceDiscovery, Backend};
 use pingora::prelude::*;
+use tracing::{error, info};
 
 use crate::r#const::{
     DOCKER_LABEL_DOCKER_COMPOSE_SERVICE, DOCKER_LABEL_GATEWAY_HOST_IP, DOCKER_LABEL_GATEWAY_MODE,
@@ -145,7 +146,7 @@ impl DockerServiceDiscovery {
                 "172.17.0.1".to_string()
             }
             Err(e) => {
-                eprintln!("Failed to inspect docker bridge network: {}", e);
+                error!("Failed to inspect docker bridge network: {}", e);
                 // 出错时返回默认IP
                 "172.17.0.1".to_string()
             }
@@ -207,7 +208,7 @@ impl ServiceDiscovery for DockerServiceDiscovery {
         upstreams.extend(backend);
         // no readiness
         let health = HashMap::new();
-        println!("discover: {:?}", upstreams);
+        info!("discover: {:?}", upstreams);
         Ok((upstreams, health))
     }
 }
