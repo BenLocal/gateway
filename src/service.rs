@@ -140,7 +140,7 @@ impl Service for ProxyService {
                     match v {
                         crate::store::ProxyCmd::Add(key, options) => {
                             let lb = Arc::new(GatewayLoadBalancer::new(&key, options));
-                            let mut reoutes = crate::store::ROUTES.write().await;
+                            let mut reoutes = crate::store::routes().write().await;
                             reoutes.insert(key.to_string(), Arc::clone(&lb));
 
                             let _ = crate::store::globalbackground_cmd(crate::store::GlobalBackgroundCmd::Add(
@@ -150,7 +150,7 @@ impl Service for ProxyService {
                             info!("add route: {}", key);
                         }
                         crate::store::ProxyCmd::Remove(key) => {
-                            let mut reoutes = crate::store::ROUTES.write().await;
+                            let mut reoutes = crate::store::routes().write().await;
                             reoutes.remove(&key);
                             // try to remove health check
                             let _ = crate::store::globalbackground_cmd(crate::store::GlobalBackgroundCmd::Remove(

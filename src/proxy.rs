@@ -3,18 +3,36 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use axum::http::{uri::PathAndQuery, Uri};
 use pingora::{
+    http::ResponseHeader,
     prelude::*,
     proxy::{ProxyHttp, Session},
 };
-use tracing::info;
+use tracing::{error, info};
 
-use crate::r#const::{GATEWAY_HEADER_EXT, GATEWAY_QUERY_EXT};
+use crate::r#const::{GATEWAY_APPID, GATEWAY_HEADER_EXT, GATEWAY_QUERY_EXT};
 
 pub struct GatewayProxy;
 
 impl GatewayProxy {
     pub fn new() -> Self {
         Self
+    }
+}
+
+impl GatewayProxy {
+    pub fn get_request_appid(&self, session: &Session) -> Option<String> {
+        match session
+            .req_header()
+            .headers
+            .get(GATEWAY_APPID)
+            .map(|v| v.to_str())
+        {
+            None => None,
+            Some(v) => match v {
+                Ok(v) => Some(v.to_string()),
+                Err(_) => None,
+            },
+        }
     }
 }
 
@@ -31,7 +49,7 @@ impl ProxyHttp for GatewayProxy {
         };
 
         let upstream = {
-            let reoutes = &crate::store::ROUTES.read().await;
+            let reoutes = &crate::store::routes().read().await;
 
             let lb = match reoutes.iter().find_map(|(_, lb)| {
                 if lb.matches_path(path) {
@@ -43,6 +61,14 @@ impl ProxyHttp for GatewayProxy {
                 Some(lb) => lb,
                 None => return Err(Error::new(ErrorType::ConnectNoRoute)),
             };
+
+            // if let Some(rate_limiter) = lb.rate_limit() {
+            //     if let Err(e) = rate_limiter.check_rate_limit(session).await {
+            //         error!("Rate limit error: {:?}", e);
+            //         // Handle rate limit exceeded
+            //         return Err(Error::new(ErrorType::Custom("Rate limit exceeded:")));
+            //     }
+            // }
 
             if let Some(new_path) = lb.rewrite_path(path) {
                 let req = session.req_header_mut();
@@ -89,6 +115,32 @@ impl ProxyHttp for GatewayProxy {
 
         let peer = Box::new(HttpPeer::new(upstream, false, "test".to_string()));
         Ok(peer)
+    }
+
+    async fn request_filter(&self, session: &mut Session, _ctx: &mut Self::CTX) -> Result<bool>
+    where
+        Self::CTX: Send + Sync,
+    {
+        let clinet_id = self.get_request_appid(session);
+        if let Some(clinet_id) = clinet_id {
+            if let Some(rl) = crate::store::rate_limiters().read().await.get(&clinet_id) {
+                let curr_window_requests = rl.increase(&clinet_id);
+                if curr_window_requests > rl.max_req_per_second() {
+                    error!("Rate limit exceeded for client: {}", clinet_id);
+                    let mut header = ResponseHeader::build(429, None).unwrap();
+                    header
+                        .insert_header("X-Rate-Limit-Limit", rl.max_req_per_second().to_string())
+                        .unwrap();
+                    session.set_keepalive(None);
+                    session
+                        .write_response_header(Box::new(header), true)
+                        .await?;
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
     }
 }
 

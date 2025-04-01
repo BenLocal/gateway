@@ -27,7 +27,7 @@ impl DockerServiceDiscovery {
     }
 
     async fn filter_container_list(&self) -> anyhow::Result<Vec<Container>> {
-        let containers = store::CONTAINERS
+        let containers = store::containers()
             .read()
             .await
             .iter()

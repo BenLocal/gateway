@@ -12,12 +12,33 @@ use crate::{
 };
 
 static PROXY_CMD: OnceCell<tokio::sync::mpsc::Sender<ProxyCmd>> = OnceCell::const_new();
-pub static ROUTES: LazyLock<RwLock<HashMap<String, Arc<GatewayLoadBalancer>>>> =
+static ROUTES: LazyLock<RwLock<HashMap<String, Arc<GatewayLoadBalancer>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 static GLOBALBACKGROUND_CMD: OnceCell<tokio::sync::mpsc::Sender<GlobalBackgroundCmd>> =
     OnceCell::const_new();
-pub static CONTAINERS: LazyLock<RwLock<Vec<ContainerSummary>>> =
+static CONTAINERS: LazyLock<RwLock<Vec<ContainerSummary>>> =
     LazyLock::new(|| RwLock::new(Vec::new()));
+static RATE_LIMITERS: LazyLock<RwLock<HashMap<String, Arc<crate::rate_limit::RateLimiter>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static DOCKER_CLIENT: LazyLock<Arc<bollard::Docker>> = LazyLock::new(|| {
+    Arc::new(bollard::Docker::connect_with_defaults().expect("fail to connect to docker"))
+});
+
+pub fn docker_client() -> Arc<bollard::Docker> {
+    Arc::clone(&DOCKER_CLIENT)
+}
+
+pub fn containers() -> &'static RwLock<Vec<ContainerSummary>> {
+    &CONTAINERS
+}
+
+pub fn rate_limiters() -> &'static RwLock<HashMap<String, Arc<crate::rate_limit::RateLimiter>>> {
+    &RATE_LIMITERS
+}
+
+pub fn routes() -> &'static RwLock<HashMap<String, Arc<GatewayLoadBalancer>>> {
+    &ROUTES
+}
 
 pub async fn proxy_cmd(cmd: ProxyCmd) -> anyhow::Result<()> {
     Ok(PROXY_CMD

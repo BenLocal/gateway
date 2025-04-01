@@ -2,13 +2,14 @@ use admin::service::AdminService;
 use pingora::prelude::*;
 use proxy::GatewayProxy;
 use service::{GlobalBackgroundService, ProxyService};
-use tracing::Level;
+use tracing::{info, Level};
 
 mod admin;
 mod r#const;
 mod docker;
 mod lb;
 mod proxy;
+mod rate_limit;
 mod service;
 mod store;
 
@@ -31,5 +32,6 @@ fn main() {
     let mut proxy_service = http_proxy_service(&my_server.configuration, GatewayProxy::new());
     proxy_service.add_tcp("0.0.0.0:6188");
     my_server.add_service(proxy_service);
+    info!("Starting Pingora server with port: 6188");
     my_server.run_forever();
 }
