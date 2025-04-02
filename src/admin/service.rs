@@ -7,7 +7,7 @@ use tracing::{error, info};
 
 use crate::{
     lb::{GatewayLoadBalancerOptions, GatewayMatchRule},
-    store::ProxyCmd,
+    proxy::ProxyCmd,
 };
 
 use super::serve::start_admin_server;

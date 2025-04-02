@@ -7,9 +7,14 @@ use pingora::{
 };
 use tracing::info;
 
-use crate::{lb::GatewayLoadBalancer, store::GlobalBackgroundCmd};
+use crate::{lb::GatewayLoadBalancer, proxy::ProxyCmd};
 
 pub type PingoraBackgroundService = Box<Arc<dyn BackgroundService + Send + Sync + 'static>>;
+
+pub enum GlobalBackgroundCmd {
+    Add(String, PingoraBackgroundService),
+    Remove(String),
+}
 
 struct BackgroundServiceInner {
     inner: Arc<PingoraBackgroundService>,
@@ -113,7 +118,7 @@ impl Service for GlobalBackgroundService {
 }
 
 pub struct ProxyService {
-    cmd_rev: tokio::sync::mpsc::Receiver<crate::store::ProxyCmd>,
+    cmd_rev: tokio::sync::mpsc::Receiver<ProxyCmd>,
 }
 
 impl ProxyService {
@@ -138,22 +143,22 @@ impl Service for ProxyService {
                 }
                 Some(v) = self.cmd_rev.recv() => {
                     match v {
-                        crate::store::ProxyCmd::Add(key, options) => {
+                        ProxyCmd::Add(key, options) => {
                             let lb = Arc::new(GatewayLoadBalancer::new(&key, options));
                             let mut reoutes = crate::store::routes().write().await;
                             reoutes.insert(key.to_string(), Arc::clone(&lb));
 
-                            let _ = crate::store::globalbackground_cmd(crate::store::GlobalBackgroundCmd::Add(
+                            let _ = crate::store::globalbackground_cmd(GlobalBackgroundCmd::Add(
                                 format!("{}_hc", key),
                                 Box::new(lb),
                             )).await;
                             info!("add route: {}", key);
                         }
-                        crate::store::ProxyCmd::Remove(key) => {
+                        ProxyCmd::Remove(key) => {
                             let mut reoutes = crate::store::routes().write().await;
                             reoutes.remove(&key);
                             // try to remove health check
-                            let _ = crate::store::globalbackground_cmd(crate::store::GlobalBackgroundCmd::Remove(
+                            let _ = crate::store::globalbackground_cmd(GlobalBackgroundCmd::Remove(
                                 format!("{}_hc", key)
                             )).await;
                             info!("remove route: {}", key);

@@ -13,9 +13,11 @@ use tracing::{error, info};
 use crate::{
     docker::{background::DockerBackgroundService, servicediscovery::DockerServiceDiscovery},
     lb::{GatewayLoadBalancerOptions, GatewayMatchRule, PingoraServiceDiscovery},
+    proxy::ProxyCmd,
     r#const::DOCKER_BACKGROUND_SERVICE_NAME,
     rate_limit::RateLimiter,
-    store::{self, docker_client, ProxyCmd},
+    service::GlobalBackgroundCmd,
+    store::{self, docker_client, GatewayApplication},
 };
 
 pub async fn start_admin_server(mut shutdown: ShutdownWatch) -> anyhow::Result<()> {
@@ -114,7 +116,7 @@ async fn add_lb(Json(req): Json<GatewayLb>) -> &'static str {
         "docker" => {
             // start docker background service
             let service = DockerBackgroundService::new(docker_client());
-            let _ = crate::store::globalbackground_cmd(crate::store::GlobalBackgroundCmd::Add(
+            let _ = crate::store::globalbackground_cmd(GlobalBackgroundCmd::Add(
                 DOCKER_BACKGROUND_SERVICE_NAME.to_string(),
                 Box::new(Arc::new(service)),
             ))
@@ -145,13 +147,13 @@ async fn add_lb(Json(req): Json<GatewayLb>) -> &'static str {
 async fn get_application(Json(app): Json<Application>) -> &'static str {
     let app_name = app.app_id;
 
-    let limiter_guard = store::rate_limiters().read().await;
-    if !limiter_guard.contains_key(&app_name) {
+    let apps = store::applications().read().await;
+    if !apps.contains_key(&app_name) {
         return "Application not found";
     }
-    let rate_limiter = limiter_guard.get(&app_name).unwrap();
-    let limit = rate_limiter.max_req_per_second();
-    let rate = rate_limiter.rate(&app_name);
+    let app = apps.get(&app_name).unwrap();
+    let limit = app.rate_limiter().max_req_per_second();
+    let rate = app.rate_limiter().rate(&app_name);
 
     info!(
         "Application: {}, Limit: {}, Rate: {}",
@@ -163,7 +165,7 @@ async fn get_application(Json(app): Json<Application>) -> &'static str {
 
 async fn remove_application(Json(app): Json<Application>) -> &'static str {
     let app_name = app.app_id;
-    store::rate_limiters().write().await.remove(&app_name);
+    store::applications().write().await.remove(&app_name);
 
     "Application removed"
 }
@@ -172,18 +174,18 @@ async fn update_application(Json(app): Json<Application>) -> &'static str {
     let app_name = app.app_id;
 
     {
-        let t = store::rate_limiters().read().await;
+        let t = store::applications().read().await;
         if !t.contains_key(&app_name) {
             return "Application not found";
         }
     }
 
-    store::rate_limiters().write().await.insert(
+    store::applications().write().await.insert(
         app_name.clone(),
-        Arc::new(RateLimiter::new(
+        Arc::new(GatewayApplication::new(RateLimiter::new(
             Rate::new(Duration::from_secs(app.limit_interval_seconds)),
             app.limit,
-        )),
+        ))),
     );
 
     "Application updated"
@@ -193,18 +195,18 @@ async fn add_application(Json(app): Json<Application>) -> &'static str {
     let app_name = app.app_id;
 
     {
-        let t = store::rate_limiters().read().await;
+        let t = store::applications().read().await;
         if t.contains_key(&app_name) {
             return "Application already exists";
         }
     }
 
-    store::rate_limiters().write().await.insert(
+    store::applications().write().await.insert(
         app_name.clone(),
-        Arc::new(RateLimiter::new(
+        Arc::new(GatewayApplication::new(RateLimiter::new(
             Rate::new(Duration::from_secs(app.limit_interval_seconds)),
             app.limit,
-        )),
+        ))),
     );
 
     "Application added"

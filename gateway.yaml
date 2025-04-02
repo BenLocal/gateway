@@ -1,0 +1,18 @@
+applications:
+  - app_id: "ssss"
+    limit_interval_seconds: 60
+    limit: 100
+  - app_id: "tttt"
+    limit_interval_seconds: 60
+    limit: 100
+load_balancers:
+  - name: app
+    match_rule:
+      type: "path_start_with"
+      value: "/docker"
+    service_discovery: docker
+  - name: app2
+    match_rule:
+      type: "path_start_with"
+      value: "/docker2"
+    service_discovery: docker

@@ -6,7 +6,7 @@ use bollard::network::InspectNetworkOptions;
 use bollard::secret::ContainerSummary;
 use pingora::lb::{discovery::ServiceDiscovery, Backend};
 use pingora::prelude::*;
-use tracing::{error, info};
+use tracing::error;
 
 use crate::r#const::{
     DOCKER_LABEL_DOCKER_COMPOSE_SERVICE, DOCKER_LABEL_GATEWAY_HOST_IP, DOCKER_LABEL_GATEWAY_MODE,
@@ -208,7 +208,6 @@ impl ServiceDiscovery for DockerServiceDiscovery {
         upstreams.extend(backend);
         // no readiness
         let health = HashMap::new();
-        info!("discover: {:?}", upstreams);
         Ok((upstreams, health))
     }
 }

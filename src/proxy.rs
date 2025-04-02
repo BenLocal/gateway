@@ -9,7 +9,15 @@ use pingora::{
 };
 use tracing::{error, info};
 
-use crate::r#const::{GATEWAY_APPID, GATEWAY_HEADER_EXT, GATEWAY_QUERY_EXT};
+use crate::{
+    lb::GatewayLoadBalancerOptions,
+    r#const::{GATEWAY_APPID, GATEWAY_HEADER_EXT, GATEWAY_QUERY_EXT},
+};
+
+pub enum ProxyCmd {
+    Add(String, GatewayLoadBalancerOptions),
+    Remove(String),
+}
 
 pub struct GatewayProxy;
 
@@ -123,7 +131,8 @@ impl ProxyHttp for GatewayProxy {
     {
         let clinet_id = self.get_request_appid(session);
         if let Some(clinet_id) = clinet_id {
-            if let Some(rl) = crate::store::rate_limiters().read().await.get(&clinet_id) {
+            if let Some(application) = crate::store::applications().read().await.get(&clinet_id) {
+                let rl = application.rate_limiter();
                 let curr_window_requests = rl.increase(&clinet_id);
                 if curr_window_requests > rl.max_req_per_second() {
                     error!("Rate limit exceeded for client: {}", clinet_id);
