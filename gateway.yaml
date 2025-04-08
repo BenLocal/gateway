@@ -11,10 +11,13 @@ load_balancers:
   - name: app
     match_rule:
       type: "path_start_with"
-      value: "/docker"
+      value: "/1app"
     service_discovery: docker
+    rewrite:
+      regex: "^/1app/(.*)"
+      replacement: "/docker/$1"
   - name: app2
     match_rule:
       type: "path_start_with"
-      value: "/docker2"
+      value: "/2app"
     service_discovery: docker

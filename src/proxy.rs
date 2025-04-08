@@ -114,14 +114,14 @@ impl ProxyHttp for GatewayProxy {
                 return false;
             }) {
                 Some(upstream) => {
-                    info!("upstream peer is: {} --> {:?}", lb.name(), upstream);
+                    info!("upstream peer is: {} --> {:?}", lb.name(), upstream,);
                     upstream
                 }
                 None => return Err(Error::new(ErrorType::ConnectNoRoute)),
             }
         };
 
-        let peer = Box::new(HttpPeer::new(upstream, false, "test".to_string()));
+        let peer = Box::new(HttpPeer::new(upstream, false, "app".to_string()));
         Ok(peer)
     }
 
