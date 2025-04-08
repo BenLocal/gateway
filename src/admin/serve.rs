@@ -1,23 +1,15 @@
-use std::{sync::Arc, time::Duration};
-
 use axum::{
     response::Html,
     routing::{get, post},
     Json, Router,
 };
 use pingora::server::ShutdownWatch;
-use pingora_limits::rate::Rate;
 use serde::{Deserialize, Serialize};
-use tracing::{error, info};
+use tracing::info;
 
 use crate::{
-    docker::{background::DockerBackgroundService, servicediscovery::DockerServiceDiscovery},
-    lb::{GatewayLoadBalancerOptions, GatewayMatchRule, PingoraServiceDiscovery},
-    proxy::ProxyCmd,
-    r#const::DOCKER_BACKGROUND_SERVICE_NAME,
-    rate_limit::RateLimiter,
-    service::GlobalBackgroundCmd,
-    store::{self, docker_client, GatewayApplication},
+    app::{self, Application, LbInfo, LbMatchRuleInfo, LbRewriteInfo},
+    store,
 };
 
 pub async fn start_admin_server(mut shutdown: ShutdownWatch) -> anyhow::Result<()> {
@@ -52,14 +44,24 @@ async fn handler() -> Html<&'static str> {
 }
 
 #[derive(Deserialize, Serialize)]
-struct Application {
+struct ApplicationRequest {
     app_id: String,
     limit_interval_seconds: u64,
     limit: u32,
 }
 
+impl Into<Application> for ApplicationRequest {
+    fn into(self) -> Application {
+        Application {
+            app_id: self.app_id,
+            limit_interval_seconds: self.limit_interval_seconds,
+            limit: self.limit,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize)]
-struct GatewayLb {
+struct GatewayLbRequest {
     name: String,
     match_rule: GatewayLbMatchRule,
     rewrite: Option<GatewayRewrite>,
@@ -79,7 +81,25 @@ struct GatewayRewrite {
     replacement: String,
 }
 
-async fn add_lb(Json(req): Json<GatewayLb>) -> &'static str {
+impl Into<LbInfo> for GatewayLbRequest {
+    fn into(self) -> LbInfo {
+        LbInfo {
+            name: self.name,
+            match_rule: LbMatchRuleInfo {
+                typ: self.match_rule.typ,
+                value: self.match_rule.value,
+            },
+            rewrite: self.rewrite.map(|r| LbRewriteInfo {
+                regex: r.regex,
+                replacement: r.replacement,
+            }),
+            service_discovery: self.service_discovery,
+            upstream: self.static_upstream,
+        }
+    }
+}
+
+async fn add_lb(Json(req): Json<GatewayLbRequest>) -> &'static str {
     {
         let routes = store::routes().read().await;
 
@@ -88,63 +108,12 @@ async fn add_lb(Json(req): Json<GatewayLb>) -> &'static str {
         }
     }
 
-    let match_rule = match req.match_rule.typ.as_str() {
-        "path_start_with" => GatewayMatchRule::PathStartsWith(req.match_rule.value),
-        "path_regex" => {
-            let regex = regex::Regex::new(&req.match_rule.value).unwrap();
-            GatewayMatchRule::PathStartsWith(regex.to_string())
-        }
-        _ => return "unsupported match rule",
-    };
-
-    let rewrite = if let Some(rewrite) = req.rewrite {
-        let regex = regex::Regex::new(&rewrite.regex).unwrap();
-        Some((regex, rewrite.replacement))
-    } else {
-        None
-    };
-
-    let (service_discovery, default_health_check): (PingoraServiceDiscovery, bool) = match req
-        .service_discovery
-        .as_str()
-    {
-        "static" => (
-            pingora::lb::discovery::Static::try_from_iter(req.static_upstream.unwrap_or_default())
-                .unwrap(),
-            false,
-        ),
-        "docker" => {
-            // start docker background service
-            let service = DockerBackgroundService::new(docker_client());
-            let _ = crate::store::globalbackground_cmd(GlobalBackgroundCmd::Add(
-                DOCKER_BACKGROUND_SERVICE_NAME.to_string(),
-                Box::new(Arc::new(service)),
-            ))
-            .await;
-
-            (
-                Box::new(DockerServiceDiscovery::new(&req.name, docker_client())),
-                true,
-            )
-        }
-        _ => return "unsupported service discovery",
-    };
-
-    let mut options =
-        GatewayLoadBalancerOptions::new(match_rule, service_discovery, default_health_check);
-
-    if let Some((regex, replacement)) = rewrite {
-        options = options.with_rewrite(regex, replacement);
-    }
-
-    if let Err(e) = crate::store::proxy_cmd(ProxyCmd::Add(req.name.to_string(), options)).await {
-        error!("err: {:?}", e);
-    }
+    app::add_load_balancer(req.into()).await;
 
     "LB added"
 }
 
-async fn get_application(Json(app): Json<Application>) -> &'static str {
+async fn get_application(Json(app): Json<ApplicationRequest>) -> &'static str {
     let app_name = app.app_id;
 
     let apps = store::applications().read().await;
@@ -163,15 +132,15 @@ async fn get_application(Json(app): Json<Application>) -> &'static str {
     "Application retrieved"
 }
 
-async fn remove_application(Json(app): Json<Application>) -> &'static str {
+async fn remove_application(Json(app): Json<ApplicationRequest>) -> &'static str {
     let app_name = app.app_id;
     store::applications().write().await.remove(&app_name);
 
     "Application removed"
 }
 
-async fn update_application(Json(app): Json<Application>) -> &'static str {
-    let app_name = app.app_id;
+async fn update_application(Json(app): Json<ApplicationRequest>) -> &'static str {
+    let app_name = app.app_id.clone();
 
     {
         let t = store::applications().read().await;
@@ -180,19 +149,13 @@ async fn update_application(Json(app): Json<Application>) -> &'static str {
         }
     }
 
-    store::applications().write().await.insert(
-        app_name.clone(),
-        Arc::new(GatewayApplication::new(RateLimiter::new(
-            Rate::new(Duration::from_secs(app.limit_interval_seconds)),
-            app.limit,
-        ))),
-    );
+    app::add_application(app.into()).await;
 
     "Application updated"
 }
 
-async fn add_application(Json(app): Json<Application>) -> &'static str {
-    let app_name = app.app_id;
+async fn add_application(Json(app): Json<ApplicationRequest>) -> &'static str {
+    let app_name = app.app_id.clone();
 
     {
         let t = store::applications().read().await;
@@ -201,13 +164,7 @@ async fn add_application(Json(app): Json<Application>) -> &'static str {
         }
     }
 
-    store::applications().write().await.insert(
-        app_name.clone(),
-        Arc::new(GatewayApplication::new(RateLimiter::new(
-            Rate::new(Duration::from_secs(app.limit_interval_seconds)),
-            app.limit,
-        ))),
-    );
+    app::add_application(app.into()).await;
 
     "Application added"
 }

@@ -1,3 +1,5 @@
+backgrounds:
+  - docker
 applications:
   - app_id: "ssss"
     limit_interval_seconds: 60

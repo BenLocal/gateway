@@ -1,6 +1,6 @@
 services:
 
-  app: 
+  app:
     image: nginx:1.26.1
     ports:
       - "8083:80"
@@ -10,6 +10,6 @@ services:
     # labels:
     #   - com.gateway.mode=bridge
     #   - com.gateway.host.ip=127.0.0.1
-  ping:
-    image: busybox:latest
-    command: tail -f /dev/null
+    # ping:
+    #   image: busybox:latest
+    #   command: tail -f /dev/null

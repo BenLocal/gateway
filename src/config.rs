@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GatewayConfig {
+    pub backgrounds: Option<Vec<String>>,
     pub applications: Option<Vec<GatewayApplicationConfig>>,
     pub load_balancers: Option<Vec<GatewayLoadBalancerConfig>>,
 }

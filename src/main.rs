@@ -1,18 +1,12 @@
-use std::{sync::Arc, time::Duration};
-
 use admin::service::AdminService;
-use docker::{background::DockerBackgroundService, servicediscovery::DockerServiceDiscovery};
-use lb::{GatewayLoadBalancerOptions, GatewayMatchRule, PingoraServiceDiscovery};
-use pingora::prelude::*;
-use pingora_limits::rate::Rate;
-use proxy::{GatewayProxy, ProxyCmd};
-use r#const::DOCKER_BACKGROUND_SERVICE_NAME;
-use rate_limit::RateLimiter;
-use service::{GlobalBackgroundCmd, GlobalBackgroundService, ProxyService};
-use store::{docker_client, GatewayApplication};
-use tracing::{error, info, Level};
+use app::{Application, BackgroundServer, LbInfo};
+use pingora::{proxy::http_proxy_service, server::Server};
+use proxy::GatewayProxy;
+use service::{GlobalBackgroundService, ProxyService};
+use tracing::{info, Level};
 
 mod admin;
+mod app;
 mod config;
 mod r#const;
 mod docker;
@@ -72,84 +66,21 @@ fn run_with_tokio_runtime() {
 }
 
 async fn init_config_to_proxy(config: &config::GatewayConfig) {
+    if let Some(bg) = &config.backgrounds {
+        for b in bg {
+            app::start_background_service(BackgroundServer::from(b.to_string())).await;
+        }
+    }
+
     if let Some(applications) = &config.applications {
         for app in applications {
-            let app_name = app.app_id.clone();
-            info!(
-                "Application: {}, Max Requests per Second: {}, Limit: {}",
-                app_name, app.limit_interval_seconds, app.limit
-            );
-            store::applications().write().await.insert(
-                app_name.clone(),
-                Arc::new(GatewayApplication::new(RateLimiter::new(
-                    Rate::new(Duration::from_secs(app.limit_interval_seconds)),
-                    app.limit,
-                ))),
-            );
+            app::add_application(Application::from(app)).await;
         }
     }
 
     if let Some(load_balancers) = &config.load_balancers {
         for lb in load_balancers {
-            let match_rule = match lb.match_rule.typ.as_str() {
-                "path_start_with" => {
-                    GatewayMatchRule::PathStartsWith(lb.match_rule.value.to_string())
-                }
-                "path_regex" => {
-                    let regex = regex::Regex::new(&lb.match_rule.value).unwrap();
-                    GatewayMatchRule::PathStartsWith(regex.to_string())
-                }
-                _ => continue,
-            };
-
-            let rewrite = if let Some(rewrite) = &lb.rewrite {
-                let regex = regex::Regex::new(&rewrite.regex).unwrap();
-                Some((regex, rewrite.replacement.clone()))
-            } else {
-                None
-            };
-
-            let (service_discovery, default_health_check): (PingoraServiceDiscovery, bool) =
-                match lb.service_discovery.as_str() {
-                    "static" => (
-                        pingora::lb::discovery::Static::try_from_iter(
-                            lb.upstream.clone().unwrap_or_default(),
-                        )
-                        .unwrap(),
-                        false,
-                    ),
-                    "docker" => {
-                        // start docker background service
-                        let service = DockerBackgroundService::new(docker_client());
-                        let _ = crate::store::globalbackground_cmd(GlobalBackgroundCmd::Add(
-                            DOCKER_BACKGROUND_SERVICE_NAME.to_string(),
-                            Box::new(Arc::new(service)),
-                        ))
-                        .await;
-
-                        (
-                            Box::new(DockerServiceDiscovery::new(&lb.name, docker_client())),
-                            true,
-                        )
-                    }
-                    _ => continue,
-                };
-
-            let mut options = GatewayLoadBalancerOptions::new(
-                match_rule,
-                service_discovery,
-                default_health_check,
-            );
-
-            if let Some((regex, replacement)) = rewrite {
-                options = options.with_rewrite(regex, replacement);
-            }
-
-            if let Err(e) =
-                crate::store::proxy_cmd(ProxyCmd::Add(lb.name.to_string(), options)).await
-            {
-                error!("err: {:?}", e);
-            }
+            app::add_load_balancer(LbInfo::from(lb)).await;
         }
     }
 }
