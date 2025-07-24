@@ -49,7 +49,7 @@ impl GlobalBackgroundService {
 
 #[async_trait]
 impl Service for GlobalBackgroundService {
-    async fn start_service(&mut self, _fds: Option<ListenFds>, shutdown: ShutdownWatch) {
+    async fn start_service(&mut self, _fds: Option<ListenFds>, shutdown: ShutdownWatch, _: usize) {
         for (_, hc) in self.services.iter_mut() {
             let (hc_tx, hc_rx) = tokio::sync::watch::channel(false);
             hc.set_close(hc_tx);
@@ -132,7 +132,7 @@ impl ProxyService {
 
 #[async_trait]
 impl Service for ProxyService {
-    async fn start_service(&mut self, _fds: Option<ListenFds>, shutdown: ShutdownWatch) {
+    async fn start_service(&mut self, _fds: Option<ListenFds>, shutdown: ShutdownWatch, _: usize) {
         loop {
             let mut shutdown = shutdown.clone();
             tokio::select! {

@@ -2,9 +2,8 @@ use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
 use bollard::{
-    container::ListContainersOptions,
-    network::{ConnectNetworkOptions, ListNetworksOptions},
-    secret::{ContainerSummary, Network},
+    query_parameters::{ListContainersOptions, ListNetworksOptions},
+    secret::{ContainerSummary, Network, NetworkConnectRequest},
 };
 use pingora::{server::ShutdownWatch, services::background::BackgroundService};
 use tracing::info;
@@ -21,7 +20,7 @@ impl DockerBackgroundService {
     }
 
     async fn update(&self) -> anyhow::Result<Vec<ContainerSummary>> {
-        let options = Some(ListContainersOptions::<String> {
+        let options = Some(ListContainersOptions {
             all: true,
             ..Default::default()
         });
@@ -43,7 +42,7 @@ impl DockerBackgroundService {
         if !network_connects.is_empty() {
             let networks = self
                 .client
-                .list_networks(None::<ListNetworksOptions<String>>)
+                .list_networks(None::<ListNetworksOptions>)
                 .await?;
 
             for c in network_connects {
@@ -77,8 +76,8 @@ impl DockerBackgroundService {
                         self.client
                             .connect_network(
                                 &name,
-                                ConnectNetworkOptions {
-                                    container: container_id,
+                                NetworkConnectRequest {
+                                    container: Some(container_id.to_string()),
                                     ..Default::default()
                                 },
                             )

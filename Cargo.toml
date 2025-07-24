@@ -5,17 +5,17 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-pingora = { version = "0.4", features = ["lb"] }
-pingora-limits = { version = "0.4" }
+pingora = { version = "0.5", features = ["lb"] }
+pingora-limits = { version = "0.5" }
 async-trait = "0.1"
 anyhow = "1"
-axum = { version = "0.8.3" }
-bollard = "0.18"
+axum = { version = "0.8.4" }
+bollard = "0.19"
 regex = "1.8"
 form_urlencoded = "1.2.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_yaml = "0.9.34+deprecated"
+serde_json = "1"
+serde_yaml = "0.9"

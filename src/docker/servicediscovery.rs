@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bollard::network::InspectNetworkOptions;
+use bollard::query_parameters::InspectNetworkOptions;
 use bollard::secret::ContainerSummary;
 use pingora::lb::{discovery::ServiceDiscovery, Backend};
 use pingora::prelude::*;
@@ -129,7 +129,7 @@ impl DockerServiceDiscovery {
     async fn get_docker0_ip(&self) -> String {
         match self
             .client
-            .inspect_network("bridge", None::<InspectNetworkOptions<String>>)
+            .inspect_network("bridge", None::<InspectNetworkOptions>)
             .await
         {
             Ok(network) => {

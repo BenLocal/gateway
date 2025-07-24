@@ -22,7 +22,7 @@ impl AdminService {
 
 #[async_trait]
 impl Service for AdminService {
-    async fn start_service(&mut self, _fds: Option<ListenFds>, shutdown: ShutdownWatch) {
+    async fn start_service(&mut self, _fds: Option<ListenFds>, shutdown: ShutdownWatch, _: usize) {
         loop {
             tokio::spawn(async {
                 let options = GatewayLoadBalancerOptions::new(
